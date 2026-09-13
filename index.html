@@ -553,12 +553,40 @@
       lineUserId = profile.userId;
       lineDisplayName = profile.displayName;
 
-      // お名前欄にLINEの表示名を自動入力し、書き換えられないようにする
+      // まず、LINEの表示名を仮に入れておく(名簿照会に失敗した場合の保険)
       userNameInput.value = lineDisplayName;
       userNameInput.readOnly = true;
       userNameInput.style.background = '#EFEBE0';
       if (userNameHint) {
-        userNameHint.textContent = 'LINEのログイン情報から自動入力されています(変更はできません)。';
+        userNameHint.textContent = '確認中…';
+      }
+
+      // 利用者名簿から本名を照会し、見つかればそちらを優先して表示する
+      const LOOKUP_URL = 'https://n8n-izanaiset.xvps.jp/webhook/lookup-name';
+      try {
+        const res = await fetch(LOOKUP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ lineUserId })
+        });
+        const result = await res.json();
+
+        if (result && result.found && result.realName) {
+          userNameInput.value = result.realName;
+          if (userNameHint) {
+            userNameHint.textContent = '利用者名簿の登録名から自動入力されています(変更はできません)。';
+          }
+        } else {
+          if (userNameHint) {
+            userNameHint.textContent = '利用者名簿に未登録のため、LINEの表示名を仮に入力しています。スタッフにお伝えください。';
+          }
+        }
+      } catch (lookupErr) {
+        // 照会に失敗しても、LINEの表示名のまま送信自体は継続できるようにする
+        if (userNameHint) {
+          userNameHint.textContent = '名簿の確認ができませんでした。LINEの表示名を仮に入力しています。';
+        }
+        console.error('name lookup error:', lookupErr);
       }
     } catch (err) {
       // LIFF以外(通常のブラウザ)で開いた場合など、LINE連携が使えない場合はここに来る
